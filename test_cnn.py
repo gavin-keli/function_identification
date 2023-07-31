@@ -23,21 +23,17 @@ def main():
     print("Preprocessing")
     dataset = FunctionIdentificationDataset(args.dataset_path, block_size=1000, padding_size=kernel_size - 1)
 
-    train_size = int(len(dataset) * 0.9)
-    test_size = len(dataset) - train_size
-    train_dataset, test_dataset = data.random_split(dataset, [train_size, test_size])
+    #train_size = int(len(dataset) * 0.9)
+    #test_size = len(dataset) - train_size
+    #train_dataset, test_dataset = data.random_split(dataset, [train_size, test_size])
 
-    model = CNNModel(embedding_dim=64, vocab_size=258, hidden_dim=16, tagset_size=2, kernel_size=kernel_size)
+    test_dataset = dataset
 
-    print("Training")
-    train_model(model, train_dataset)
-
-    torch.save(model, './model_gcc')
-    print("Model Saved !")
+    print("Loading model")
+    model = torch.load('./model_gcc')
 
     print("Testing")
     test_model(model, test_dataset)
-
 
 def test_model(model, test_dataset):
     test_loader = data.DataLoader(test_dataset)
@@ -65,24 +61,6 @@ def test_model(model, test_dataset):
         print("pr: {}".format(pr))
         print("recall: {}".format(recall))
         print("f1: {}".format(f1))
-
-
-def train_model(model, train_dataset):
-    loss_function = nn.NLLLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    train_loader = data.DataLoader(train_dataset, shuffle=True)
-    model.train()
-    for sample, tags in tqdm.tqdm(train_loader):
-        sample = sample[0]
-        tags = tags[0]
-        model.zero_grad()
-
-        tag_scores = model(sample)
-
-        loss = loss_function(tag_scores, tags)
-        loss.backward()
-        optimizer.step()
-
 
 if __name__ == '__main__':
     main()

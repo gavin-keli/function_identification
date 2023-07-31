@@ -10,9 +10,9 @@ FILE_START = 256
 FILE_END = 257
 
 
-class FunctionIdentificationDataset(data.Dataset):
-    def __init__(self, root_directory, block_size, padding_size):
-        data, tags = self._preprocess_data(root_directory)
+class FunctionIdentificationELF(data.Dataset):
+    def __init__(self, elf_file_path, block_size, padding_size):
+        data, tags = self._preprocess_data(elf_file_path)
         self._data_blocks, self._tags_blocks = self._split_to_blocks(data, tags, block_size, padding_size)
 
     def __len__(self):
@@ -21,18 +21,13 @@ class FunctionIdentificationDataset(data.Dataset):
     def __getitem__(self, idx):
         return self._data_blocks[idx], self._tags_blocks[idx]
 
-    def _preprocess_data(self, root_directory):
+    def _preprocess_data(self, elf_file_path):
         files_data = []
         files_tags = []
-        # Iterates over every binary in the dataset
-        # ELF dataset   root_directory = ./elf/elf_64/ ==> ./elf/elf_64/1/binary/*
-        if 'elf' in root_directory:
-            glob_path = glob.glob(os.path.join(root_directory, "*", "binary", "*"))
-        # lookback-corpus root_directory = ./lookback-corpus/testsuite-gnutils-gcc/O1/strip/ ==> ./lookback-corpus/testsuite-gnutils-gcc/O1/strip/*
-        elif 'strip' in root_directory:
-            glob_path = glob.glob(os.path.join(root_directory, "*"))
-            
-        for binary_path in tqdm.tqdm(glob_path):
+        # Locate single elf file
+        glob_path = glob.glob(os.path.join(elf_file_path))
+
+        for binary_path in glob_path:
             with open(binary_path, "rb") as binary_file:
                 binary_elf = ELFFile(binary_file)
 
@@ -41,11 +36,7 @@ class FunctionIdentificationDataset(data.Dataset):
 
                 # Extract the tags of each byte in the binary code (1 if it is a start of a function, 0 otherwise, ALL 0 means no info).
                 #print('binary_path',binary_path)
-                if '-strip' in binary_path:
-                    text_section = binary_elf.get_section_by_name(".text")
-                    tags = numpy.zeros(text_section.data_size, dtype=int)
-                else:
-                    tags = self._generate_tags(binary_elf)
+                tags = self._generate_tags(binary_elf)
 
                 files_data.append(data)
                 files_tags.append(tags)
@@ -67,11 +58,19 @@ class FunctionIdentificationDataset(data.Dataset):
         function_addresses = [function_address - text_section["sh_addr"] for function_address in
                               self._get_function_addresses(binary_elf)]
         
-        #print(function_addresses)
+        print('text_section["sh_addr"]', text_section["sh_addr"])
 
         tags = numpy.zeros(text_section.data_size, dtype=int)
         tags[function_addresses] = 1
         return tags
+    
+    def _generate_all_instruction(self, binary_elf: ELFFile):
+        text_section = binary_elf.get_section_by_name(".text")
+        sh_addr = text_section["sh_addr"]
+        num_of_instruction = text_section.data_size
+
+        # just print out function address
+        return list(range(sh_addr, sh_addr+num_of_instruction))
 
     @staticmethod
     def _get_function_addresses(binary_elf):
